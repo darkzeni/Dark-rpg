@@ -2,33 +2,326 @@
 <html>
 <head>
   <title>RPG Beta</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: monospace;
+      background: #0f0f0f;
+      color: #00ffcc;
+      display: flex;
+      height: 100vh;
+    }
+
+    #sidebar {
+      width: 30%;
+      background: #111;
+      border-right: 1px solid #333;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #header {
+      padding: 10px;
+      background: #111;
+      border-bottom: 1px solid #333;
+      text-align: center;
+    }
+
+    #log {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    #inputBox {
+      display: flex;
+      border-top: 1px solid #333;
+    }
+
+    input {
+      flex: 1;
+      padding: 12px;
+      background: #111;
+      border: none;
+      color: white;
+    }
+
+    button {
+      padding: 12px;
+      background: #00ffcc;
+      border: none;
+      font-weight: bold;
+    }
+
+    .panel {
+      margin-bottom: 15px;
+    }
+
+    .panel h3 {
+      margin: 0 0 5px 0;
+      color: #fff;
+    }
+
+    .suggestions span {
+      display: inline-block;
+      background: #222;
+      padding: 5px;
+      margin: 3px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
 
-<h2>Chat RPG</h2>
+<div id="sidebar">
+  <div class="panel">
+    <h3>Stats</h3>
+    <div id="stats">Loading...</div>
+  </div>
 
-<input id="cmd" placeholder="train strength / craft stone sword / hax">
-<button onclick="send()">Send</button>
+  <div class="panel">
+    <h3>Inventory</h3>
+    <div id="inventory">Loading...</div>
+  </div>
 
-<pre id="log"></pre>
+  <div class="panel">
+    <h3>Commands</h3>
+    <div class="suggestions">
+      <span onclick="quick('train strength')">train strength</span>
+      <span onclick="quick('inventory')">inventory</span>
+      <span onclick="quick('hax')">hax</span>
+      <span onclick="quick('leaderboard')">leaderboard</span>
+      <span onclick="quick('craft stone sword')">craft sword</span>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="header">⚔️ RPG BETA</div>
+
+  <div id="log">Welcome. Type a command.</div>
+
+  <div id="inputBox">
+    <input id="cmd" placeholder="type command...">
+    <button onclick="send()">Send</button>
+  </div>
+</div>
 
 <script>
 async function send() {
-  let cmd = document.getElementById("cmd").value;
+  let input = document.getElementById("cmd");
+  let log = document.getElementById("log");
 
-  let res = await fetch("/command", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      user: "player1",
-      command: cmd
-    })
-  });
+  let cmd = input.value;
+  if (!cmd) return;
 
-  let data = await res.json();
+  log.innerText += "\n> " + cmd;
 
-  document.getElementById("log").innerText += "\n> " + cmd;
-  document.getElementById("log").innerText += "\n" + data.msg + "\n";
+  try {
+    let res = await fetch("/command", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        user: "player1",
+        command: cmd
+      })
+    });
+
+    let data = await res.json();
+    log.innerText += "\n" + data.msg + "\n";
+
+    updatePanels(data.msg);
+  } catch {
+    log.innerText += "\n[SERVER ERROR]\n";
+  }
+
+  input.value = "";
+  log.scrollTop = log.scrollHeight;
+}
+
+function quick(cmd) {
+  document.getElementById("cmd").value = cmd;
+}
+
+function updatePanels(msg) {
+  if (msg.includes("{")) {
+    try {
+      let parsed = JSON.parse(msg);
+      document.getElementById("inventory").innerText =
+        JSON.stringify(parsed, null, 2);
+    } catch {}
+  }
+}
+</script>
+
+</body>
+</html><!DOCTYPE html>
+<html>
+<head>
+  <title>RPG Beta</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: monospace;
+      background: #0f0f0f;
+      color: #00ffcc;
+      display: flex;
+      height: 100vh;
+    }
+
+    #sidebar {
+      width: 30%;
+      background: #111;
+      border-right: 1px solid #333;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #header {
+      padding: 10px;
+      background: #111;
+      border-bottom: 1px solid #333;
+      text-align: center;
+    }
+
+    #log {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    #inputBox {
+      display: flex;
+      border-top: 1px solid #333;
+    }
+
+    input {
+      flex: 1;
+      padding: 12px;
+      background: #111;
+      border: none;
+      color: white;
+    }
+
+    button {
+      padding: 12px;
+      background: #00ffcc;
+      border: none;
+      font-weight: bold;
+    }
+
+    .panel {
+      margin-bottom: 15px;
+    }
+
+    .panel h3 {
+      margin: 0 0 5px 0;
+      color: #fff;
+    }
+
+    .suggestions span {
+      display: inline-block;
+      background: #222;
+      padding: 5px;
+      margin: 3px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="panel">
+    <h3>Stats</h3>
+    <div id="stats">Loading...</div>
+  </div>
+
+  <div class="panel">
+    <h3>Inventory</h3>
+    <div id="inventory">Loading...</div>
+  </div>
+
+  <div class="panel">
+    <h3>Commands</h3>
+    <div class="suggestions">
+      <span onclick="quick('train strength')">train strength</span>
+      <span onclick="quick('inventory')">inventory</span>
+      <span onclick="quick('hax')">hax</span>
+      <span onclick="quick('leaderboard')">leaderboard</span>
+      <span onclick="quick('craft stone sword')">craft sword</span>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="header">⚔️ RPG BETA</div>
+
+  <div id="log">Welcome. Type a command.</div>
+
+  <div id="inputBox">
+    <input id="cmd" placeholder="type command...">
+    <button onclick="send()">Send</button>
+  </div>
+</div>
+
+<script>
+async function send() {
+  let input = document.getElementById("cmd");
+  let log = document.getElementById("log");
+
+  let cmd = input.value;
+  if (!cmd) return;
+
+  log.innerText += "\n> " + cmd;
+
+  try {
+    let res = await fetch("/command", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        user: "player1",
+        command: cmd
+      })
+    });
+
+    let data = await res.json();
+    log.innerText += "\n" + data.msg + "\n";
+
+    updatePanels(data.msg);
+  } catch {
+    log.innerText += "\n[SERVER ERROR]\n";
+  }
+
+  input.value = "";
+  log.scrollTop = log.scrollHeight;
+}
+
+function quick(cmd) {
+  document.getElementById("cmd").value = cmd;
+}
+
+function updatePanels(msg) {
+  if (msg.includes("{")) {
+    try {
+      let parsed = JSON.parse(msg);
+      document.getElementById("inventory").innerText =
+        JSON.stringify(parsed, null, 2);
+    } catch {}
+  }
 }
 </script>
 
