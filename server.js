@@ -79,7 +79,7 @@ function getPlayer(id) {
 // HOMEPAGE (FIXED)
 // =========================
 app.get("/", (req, res) => {
-  res.send("RPG server is running");
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
 // =========================
@@ -101,6 +101,85 @@ app.post("/command", (req, res) => {
     if (!p.stats[stat]) {
       msg = "Unknown stat";
     } else {
+      p.stats[stat] += 1;
+      msg = `${stat} increased to ${p.stats[stat]}`;
+    }
+  }
+
+  // INVENTORY
+  else if (base === "inventory") {
+    msg = JSON.stringify(p.inventory, null, 2);
+  }
+
+  // LEADERBOARD
+  else if (base === "leaderboard") {
+    let board = Object.entries(players)
+      .sort((a, b) => b[1].stats.strength - a[1].stats.strength)
+      .map(([name, data]) => `${name}: STR ${data.stats.strength}`)
+      .join("\n");
+
+    msg = board || "No players";
+  }
+
+  // CRAFT
+  else if (base === "craft") {
+    let itemName = command.replace("craft ", "");
+
+    let item = items[itemName];
+    if (!item || !item.req) {
+      msg = "Invalid recipe";
+    } else {
+      let canCraft = true;
+
+      for (let r in item.req) {
+        if ((p.inventory[r] || 0) < item.req[r]) {
+          canCraft = false;
+          msg = "Missing materials";
+        }
+      }
+
+      if (canCraft) {
+        for (let r in item.req) {
+          p.inventory[r] -= item.req[r];
+        }
+
+        p.inventory[itemName] = (p.inventory[itemName] || 0) + 1;
+        msg = `Crafted ${itemName}`;
+      }
+    }
+  }
+
+  // HAX
+  else if (base === "hax") {
+    msg = "Hax: " + p.hax.join(", ");
+  }
+
+  else if (base === "use") {
+    let name = command.replace("use ", "");
+    let ability = hax[name];
+
+    if (!ability) {
+      msg = "Unknown hax";
+    } else if (!p.hax.includes(name)) {
+      msg = "You don't own this hax";
+    } else {
+      msg = `Used ${name}: ${ability.effect}`;
+    }
+  }
+
+  else {
+    msg = "Unknown command";
+  }
+
+  res.json({ msg });
+});
+
+// =========================
+// START SERVER
+// =========================
+app.listen(3000, () => {
+  console.log("RPG running on port 3000");
+});    } else {
       p.stats[stat] += 1;
       msg = `${stat} increased to ${p.stats[stat]}`;
     }
