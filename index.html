@@ -16,7 +16,7 @@
 async function send() {
   let cmd = document.getElementById("cmd").value;
 
-  let res = await fetch("http://localhost:3000/command", {
+  let res = await fetch("/command", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({
