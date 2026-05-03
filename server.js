@@ -79,7 +79,11 @@ function getPlayer(id) {
 app.post("/command", (req, res) => {
   const { user, command } = req.body;
   const p = getPlayer(user);
+const path = require("path");
 
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
   let msg = "";
 
   const args = command.toLowerCase().split(" ");
