@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RPG Beta</title>
+</head>
+<body>
+
+<h2>Chat RPG</h2>
+
+<input id="cmd" placeholder="train strength / craft stone sword / hax">
+<button onclick="send()">Send</button>
+
+<pre id="log"></pre>
+
+<script>
+async function send() {
+  let cmd = document.getElementById("cmd").value;
+
+  let res = await fetch("http://localhost:3000/command", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      user: "player1",
+      command: cmd
+    })
+  });
+
+  let data = await res.json();
+
+  document.getElementById("log").innerText += "\n> " + cmd;
+  document.getElementById("log").innerText += "\n" + data.msg + "\n";
+}
+</script>
+
+</body>
+</html>
