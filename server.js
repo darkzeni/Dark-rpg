@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
+
 const app = express();
 
 app.use(cors());
@@ -11,7 +13,7 @@ app.use(express.json());
 let players = {};
 
 // =========================
-// ITEM SYSTEM (DATA DRIVEN)
+// ITEM SYSTEM
 // =========================
 const items = {
   stone: { type: "material" },
@@ -29,7 +31,7 @@ const items = {
 };
 
 // =========================
-// HAX SYSTEM (EXPANDABLE)
+// HAX SYSTEM
 // =========================
 const hax = {
   "speed burst": {
@@ -74,24 +76,25 @@ function getPlayer(id) {
 }
 
 // =========================
-// COMMAND ENGINE
+// HOMEPAGE (FIXED)
+// =========================
+app.get("/", (req, res) => {
+  res.send("RPG server is running");
+});
+
+// =========================
+// COMMAND SYSTEM
 // =========================
 app.post("/command", (req, res) => {
   const { user, command } = req.body;
   const p = getPlayer(user);
-const path = require("path");
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
   let msg = "";
 
   const args = command.toLowerCase().split(" ");
   const base = args[0];
 
-  // -------------------------
-  // TRAIN SYSTEM
-  // -------------------------
+  // TRAIN
   if (base === "train") {
     let stat = args[1];
 
@@ -103,16 +106,12 @@ app.get("/", (req, res) => {
     }
   }
 
-  // -------------------------
   // INVENTORY
-  // -------------------------
   else if (base === "inventory") {
     msg = JSON.stringify(p.inventory, null, 2);
   }
 
-  // -------------------------
-  // LEADERBOARD (simple for now)
-  // -------------------------
+  // LEADERBOARD
   else if (base === "leaderboard") {
     let board = Object.entries(players)
       .sort((a, b) => b[1].stats.strength - a[1].stats.strength)
@@ -122,9 +121,7 @@ app.get("/", (req, res) => {
     msg = board || "No players";
   }
 
-  // -------------------------
-  // CRAFTING SYSTEM
-  // -------------------------
+  // CRAFT
   else if (base === "craft") {
     let itemName = command.replace("craft ", "");
 
@@ -152,9 +149,7 @@ app.get("/", (req, res) => {
     }
   }
 
-  // -------------------------
-  // HAX SYSTEM
-  // -------------------------
+  // HAX
   else if (base === "hax") {
     msg = "Hax: " + p.hax.join(", ");
   }
@@ -179,6 +174,8 @@ app.get("/", (req, res) => {
   res.json({ msg });
 });
 
+// =========================
+// START SERVER
 // =========================
 app.listen(3000, () => {
   console.log("RPG running on port 3000");
