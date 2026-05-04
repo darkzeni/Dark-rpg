@@ -11,101 +11,65 @@ app.use(express.static(__dirname));
 // ===== SAVE =====
 const SAVE = "save.json";
 let players = {};
-if (fs.existsSync(SAVE)) players = JSON.parse(fs.readFileSync(SAVE));
+if (fs.existsSync(SAVE)) {
+  players = JSON.parse(fs.readFileSync(SAVE));
+}
 
 function save() {
   fs.writeFileSync(SAVE, JSON.stringify(players, null, 2));
 }
 
-// ===== GLOBAL =====
-let worldEvent = null;
-let lastEvent = Date.now();
+// ===== DATA =====
+const ores = ["stone","iron","coal","copper"];
 
-// ===== CONTENT POOLS =====
-
-// ORES (FILLER + EXPANSION BASE)
-const ores = [
-  "stone","iron","coal","copper","nickel","tin"
-];
-
-// ENEMIES (EARLY GAME VARIANTS)
 const enemies = {
   slime:{hp:20,atk:[4,6]},
-  "red slime":{hp:25,atk:[5,7]},
   goblin:{hp:30,atk:[6,8]},
-  lizard:{hp:35,atk:[7,9]},
-  serpent:{hp:40,atk:[8,10]}
+  lizard:{hp:35,atk:[7,9]}
 };
 
-// BOSSES
-const bosses = {
-  cave_guardian:{
-    hp:200,
-    atk:[12,15],
-    phase2:{hp:100,atk:[18,22]}
-  }
-};
-
-// ITEMS
 const items = {
   "iron sword":{type:"weapon",dmg:5},
   "iron armour":{type:"armor",def:5}
 };
 
-// BASE RECIPES
 const recipes = {
   "iron sword":{iron:5},
   "iron armour":{iron:8}
 };
 
-// ABILITIES
-const abilityTiers = {F:1,E:1.2,D:1.5,C:2};
-
-const abilitiesData = {
-  punch:{tier:"F",scaling:"strength",base:1},
-  kick:{tier:"F",scaling:"strength",base:2},
-  slam:{tier:"E",scaling:"strength",base:4},
-  dash:{tier:"E",scaling:"speed",base:3}
+const abilities = {
+  punch:{stat:"strength",base:2},
+  kick:{stat:"strength",base:3}
 };
 
 // ===== PLAYER =====
 function getPlayer(id){
   if(!players[id]){
     players[id]={
-      name:null,
-      tutorial:true,
+      name:id,
 
       level:1,
       xp:0,
       xpNeeded:50,
       sp:0,
 
-      baseStats:{strength:5,defense:2,stamina:5,intelligence:1,speed:3},
+      baseStats:{strength:5,defense:2,stamina:5,speed:3},
       stats:{},
 
-      hp:100,maxHp:100,
+      hp:100,
+      maxHp:100,
 
       inventory:{stone:20,iron:10},
-
       equipment:{weapon:null,armor:null},
 
       abilities:["punch"],
-      abilityXP:{},
 
-      limitBreak:{strength:10,defense:10},
-
-      queue:[],
       activeTask:null,
+      queue:[],
 
       combat:null,
-
-      memory:[],
-      discoveredRecipes:{},
-
-      mobIndex:{},
-
-      zone:"plains",
-      dimension:"overworld"
+      mobIndex:{}
     };
   }
   return players[id];
@@ -138,7 +102,7 @@ function addXP(p,amt){
     p.level++;
     p.sp+=5;
     p.xpNeeded=Math.floor(p.xpNeeded*1.5);
-    msg+=`\nLEVEL UP → ${p.level} (+5 SP)`;
+    msg+=`\nLEVEL UP → ${p.level}`;
   }
 
   return msg;
@@ -150,57 +114,40 @@ function startTask(p,type,data,duration){
 }
 
 function processTask(p){
-  if(!p.activeTask && p.queue.length>0){
-    let n=p.queue.shift();
-    startTask(p,n.type,n.data,n.duration);
-  }
-
   if(p.activeTask){
     if(Date.now()-p.activeTask.start>=p.activeTask.duration){
-      let r=completeTask(p,p.activeTask);
+      let t=p.activeTask;
       p.activeTask=null;
-      return r;
+      return completeTask(p,t);
     }
   }
   return null;
 }
 
-// ===== TASK COMPLETE =====
 function completeTask(p,t){
 
-  // TRAIN
   if(t.type==="train"){
-    if(p.baseStats[t.data]>=p.limitBreak[t.data]){
-      return "Limit reached";
-    }
-
-    p.baseStats[t.data]+=1;
+    p.baseStats[t.data]++;
     return `${t.data} increased\n${addXP(p,5)}`;
   }
 
-  // EXPLORE
   if(t.type==="explore"){
     let r=Math.random();
 
-    if(r<0.4){
+    if(r<0.5){
       let ore=ores[Math.floor(Math.random()*ores.length)];
       p.inventory[ore]=(p.inventory[ore]||0)+2;
-      return `Mined ${ore}\n${addXP(p,8)}`;
-    }
-
-    if(r<0.8){
+      return `Found ${ore}\n${addXP(p,8)}`;
+    } else {
       let names=Object.keys(enemies);
       let e=names[Math.floor(Math.random()*names.length)];
       return `Encountered ${e}`;
     }
-
-    return "Nothing found";
   }
 
-  // CRAFT
   if(t.type==="craft"){
     let item=t.data;
-    let r=p.discoveredRecipes[item]||recipes[item];
+    let r=recipes[item];
 
     if(!r) return "No recipe";
 
@@ -215,50 +162,7 @@ function completeTask(p,t){
     return `${item} crafted`;
   }
 
-  // DISCOVER
-  if(t.type==="discover"){
-    let name=t.data;
-    let mats=["stone","iron","coal","copper"];
-    let req={};
-
-    for(let i=0;i<3;i++){
-      let m=mats[Math.floor(Math.random()*mats.length)];
-      req[m]=(req[m]||0)+Math.floor(Math.random()*3)+1;
-    }
-
-    p.discoveredRecipes[name]=req;
-
-    return `Discovered recipe for ${name}`;
-  }
-
-  // BOSS
-  if(t.type==="boss"){
-    let b=bosses.cave_guardian;
-
-    p.combat={
-      name:"Cave Guardian",
-      hp:b.hp,
-      atk:b.atk,
-      phase:1,
-      data:b
-    };
-
-    return "Boss spawned";
-  }
-
   return "Done";
-}
-
-// ===== ABILITIES =====
-function useAbility(name,p){
-  let ab=abilitiesData[name];
-  if(!ab) return 0;
-
-  let stat=p.stats[ab.scaling]||1;
-  let tier=abilityTiers[ab.tier]||1;
-  let xp=p.abilityXP[name]||0;
-
-  return Math.floor((ab.base+stat)*tier*(1+xp/20));
 }
 
 // ===== COMBAT =====
@@ -267,25 +171,15 @@ function combat(input,p){
 
   if(input.startsWith("use")){
     let ab=input.replace("use ","");
+    if(!abilities[ab]) return "No ability";
 
-    if(!p.abilities.includes(ab)) return "No ability";
-
-    let dmg=useAbility(ab,p);
+    let dmg=abilities[ab].base + p.stats[abilities[ab].stat];
     c.hp-=dmg;
-
-    p.abilityXP[ab]=(p.abilityXP[ab]||0)+1;
-
-    // PHASE CHANGE
-    if(c.data && c.hp<=c.data.phase2.hp && c.phase===1){
-      c.phase=2;
-      c.atk=c.data.phase2.atk;
-      return "Boss entered phase 2";
-    }
 
     if(c.hp<=0){
       p.mobIndex[c.name]=true;
       p.combat=null;
-      return `${c.name} defeated\n${addXP(p,100)}`;
+      return `${c.name} defeated\n${addXP(p,20)}`;
     }
 
     let taken=Math.max(0,c.atk[Math.floor(Math.random()*c.atk.length)]-p.stats.defense);
@@ -308,47 +202,20 @@ function run(input,p){
 
   applyStats(p);
 
-  // NAME
-  if(!p.name){
-    if(input.startsWith("name")){
-      p.name=input.replace("name ","");
-      return `Welcome ${p.name}`;
-    }
-    return "Set name using: name yourname";
-  }
-
-  // TUTORIAL
-  if(p.tutorial){
-    p.tutorial=false;
-    return `
-WELCOME
-
-Everything takes time
-
-Train 60s
-Explore 60s
-Craft 45s
-
-Level up = SP
-Use SP with add stat
-
-Start:
-explore
-train strength
-fight
-
-Type info anytime
-`;
-  }
-
   let t=processTask(p);
   if(t) return t;
 
   if(p.combat) return combat(input,p);
 
-  if(p.activeTask) return "Busy";
+  if(p.activeTask && input !== "cancel"){
+    return "Busy... type cancel";
+  }
 
-  // COMMANDS
+  if(input==="cancel"){
+    p.activeTask=null;
+    return "Cancelled";
+  }
+
   if(input==="explore"){
     startTask(p,"explore",null,60000);
     return "Exploring...";
@@ -375,15 +242,20 @@ Type info anytime
     return "Crafting...";
   }
 
-  if(input.startsWith("discover")){
-    let item=input.replace("discover ","");
-    startTask(p,"discover",item,90000);
-    return "Researching...";
-  }
+  if(input.startsWith("equip")){
+    let item=input.replace("equip ","");
 
-  if(input==="boss"){
-    startTask(p,"boss",null,60000);
-    return "Preparing boss...";
+    if(items[item]?.type==="weapon"){
+      p.equipment.weapon=item;
+      return `${item} equipped`;
+    }
+
+    if(items[item]?.type==="armor"){
+      p.equipment.armor=item;
+      return `${item} equipped`;
+    }
+
+    return "Can't equip";
   }
 
   if(input.startsWith("add")){
@@ -392,19 +264,6 @@ Type info anytime
     p.baseStats[stat]++;
     p.sp--;
     return `${stat} increased`;
-  }
-
-  if(input==="info"){
-    return `
-Train 60s small XP
-Explore 60s medium XP
-Boss huge XP
-
-Level gives SP
-Use add strength
-
-Boss fastest leveling
-`;
   }
 
   if(input==="inventory") return JSON.stringify(p.inventory,null,2);
@@ -422,13 +281,19 @@ app.get("/",(req,res)=>{
 
 app.post("/command",(req,res)=>{
   const {user,command}=req.body;
-  let p=getPlayer(user||"temp");
 
+  if(!user){
+    return res.json({msg:"No user"});
+  }
+
+  let p=getPlayer(user);
   let msg=run(command,p);
 
   save();
 
-  res.json({msg,player:p,worldEvent});
+  res.json({msg,player:p});
 });
 
-app.listen(process.env.PORT||3000);
+app.listen(process.env.PORT||3000,()=>{
+  console.log("Server running");
+});
