@@ -1,328 +1,130 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>RPG Beta</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: monospace;
-      background: #0f0f0f;
-      color: #00ffcc;
-      display: flex;
-      height: 100vh;
-    }
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RPG AI</title>
 
-    #sidebar {
-      width: 30%;
-      background: #111;
-      border-right: 1px solid #333;
-      padding: 10px;
-      box-sizing: border-box;
-    }
+<style>
+body {
+  margin: 0;
+  display: flex;
+  height: 100vh;
+  background: #0f0f0f;
+  color: white;
+  font-family: Arial;
+}
 
-    #main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
+#chat {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+}
 
-    #header {
-      padding: 10px;
-      background: #111;
-      border-bottom: 1px solid #333;
-      text-align: center;
-    }
+#messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
 
-    #log {
-      flex: 1;
-      padding: 10px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-    }
+.msg {
+  padding: 10px;
+  margin: 5px;
+  border-radius: 10px;
+  max-width: 70%;
+}
 
-    #inputBox {
-      display: flex;
-      border-top: 1px solid #333;
-    }
+.user { background: #00ffcc; color: black; margin-left: auto; }
+.bot { background: #222; }
 
-    input {
-      flex: 1;
-      padding: 12px;
-      background: #111;
-      border: none;
-      color: white;
-    }
+#input {
+  display: flex;
+}
 
-    button {
-      padding: 12px;
-      background: #00ffcc;
-      border: none;
-      font-weight: bold;
-    }
+input {
+  flex: 1;
+  padding: 15px;
+  border: none;
+  background: #111;
+  color: white;
+}
 
-    .panel {
-      margin-bottom: 15px;
-    }
+button {
+  padding: 15px;
+  background: #00ffcc;
+  border: none;
+}
 
-    .panel h3 {
-      margin: 0 0 5px 0;
-      color: #fff;
-    }
-
-    .suggestions span {
-      display: inline-block;
-      background: #222;
-      padding: 5px;
-      margin: 3px;
-      cursor: pointer;
-    }
-  </style>
+#side {
+  flex: 1;
+  background: #111;
+  padding: 10px;
+  overflow-y: auto;
+}
+</style>
 </head>
+
 <body>
 
-<div id="sidebar">
-  <div class="panel">
-    <h3>Stats</h3>
-    <div id="stats">Loading...</div>
-  </div>
+<div id="chat">
+  <div id="messages"></div>
 
-  <div class="panel">
-    <h3>Inventory</h3>
-    <div id="inventory">Loading...</div>
-  </div>
-
-  <div class="panel">
-    <h3>Commands</h3>
-    <div class="suggestions">
-      <span onclick="quick('train strength')">train strength</span>
-      <span onclick="quick('inventory')">inventory</span>
-      <span onclick="quick('hax')">hax</span>
-      <span onclick="quick('leaderboard')">leaderboard</span>
-      <span onclick="quick('craft stone sword')">craft sword</span>
-    </div>
-  </div>
-</div>
-
-<div id="main">
-  <div id="header">⚔️ RPG BETA</div>
-
-  <div id="log">Welcome. Type a command.</div>
-
-  <div id="inputBox">
-    <input id="cmd" placeholder="type command...">
+  <div id="input">
+    <input id="cmd" placeholder="Say something...">
     <button onclick="send()">Send</button>
   </div>
 </div>
 
-<script>
-async function send() {
-  let input = document.getElementById("cmd");
-  let log = document.getElementById("log");
+<div id="side">
+  <h3>Stats</h3>
+  <pre id="stats"></pre>
 
-  let cmd = input.value;
-  if (!cmd) return;
-
-  log.innerText += "\n> " + cmd;
-
-  try {
-    let res = await fetch("/command", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        user: "player1",
-        command: cmd
-      })
-    });
-
-    let data = await res.json();
-    log.innerText += "\n" + data.msg + "\n";
-
-    updatePanels(data.msg);
-  } catch {
-    log.innerText += "\n[SERVER ERROR]\n";
-  }
-
-  input.value = "";
-  log.scrollTop = log.scrollHeight;
-}
-
-function quick(cmd) {
-  document.getElementById("cmd").value = cmd;
-}
-
-function updatePanels(msg) {
-  if (msg.includes("{")) {
-    try {
-      let parsed = JSON.parse(msg);
-      document.getElementById("inventory").innerText =
-        JSON.stringify(parsed, null, 2);
-    } catch {}
-  }
-}
-</script>
-
-</body>
-</html><!DOCTYPE html>
-<html>
-<head>
-  <title>RPG Beta</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: monospace;
-      background: #0f0f0f;
-      color: #00ffcc;
-      display: flex;
-      height: 100vh;
-    }
-
-    #sidebar {
-      width: 30%;
-      background: #111;
-      border-right: 1px solid #333;
-      padding: 10px;
-      box-sizing: border-box;
-    }
-
-    #main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-
-    #header {
-      padding: 10px;
-      background: #111;
-      border-bottom: 1px solid #333;
-      text-align: center;
-    }
-
-    #log {
-      flex: 1;
-      padding: 10px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-    }
-
-    #inputBox {
-      display: flex;
-      border-top: 1px solid #333;
-    }
-
-    input {
-      flex: 1;
-      padding: 12px;
-      background: #111;
-      border: none;
-      color: white;
-    }
-
-    button {
-      padding: 12px;
-      background: #00ffcc;
-      border: none;
-      font-weight: bold;
-    }
-
-    .panel {
-      margin-bottom: 15px;
-    }
-
-    .panel h3 {
-      margin: 0 0 5px 0;
-      color: #fff;
-    }
-
-    .suggestions span {
-      display: inline-block;
-      background: #222;
-      padding: 5px;
-      margin: 3px;
-      cursor: pointer;
-    }
-  </style>
-</head>
-<body>
-
-<div id="sidebar">
-  <div class="panel">
-    <h3>Stats</h3>
-    <div id="stats">Loading...</div>
-  </div>
-
-  <div class="panel">
-    <h3>Inventory</h3>
-    <div id="inventory">Loading...</div>
-  </div>
-
-  <div class="panel">
-    <h3>Commands</h3>
-    <div class="suggestions">
-      <span onclick="quick('train strength')">train strength</span>
-      <span onclick="quick('inventory')">inventory</span>
-      <span onclick="quick('hax')">hax</span>
-      <span onclick="quick('leaderboard')">leaderboard</span>
-      <span onclick="quick('craft stone sword')">craft sword</span>
-    </div>
-  </div>
-</div>
-
-<div id="main">
-  <div id="header">⚔️ RPG BETA</div>
-
-  <div id="log">Welcome. Type a command.</div>
-
-  <div id="inputBox">
-    <input id="cmd" placeholder="type command...">
-    <button onclick="send()">Send</button>
-  </div>
+  <h3>Leaderboard</h3>
+  <pre id="leaderboard"></pre>
 </div>
 
 <script>
+function addMsg(text, type) {
+  let div = document.createElement("div");
+  div.className = "msg " + type;
+  div.innerText = text;
+  document.getElementById("messages").appendChild(div);
+}
+
 async function send() {
   let input = document.getElementById("cmd");
-  let log = document.getElementById("log");
+  let text = input.value;
+  if (!text) return;
 
-  let cmd = input.value;
-  if (!cmd) return;
-
-  log.innerText += "\n> " + cmd;
-
-  try {
-    let res = await fetch("/command", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        user: "player1",
-        command: cmd
-      })
-    });
-
-    let data = await res.json();
-    log.innerText += "\n" + data.msg + "\n";
-
-    updatePanels(data.msg);
-  } catch {
-    log.innerText += "\n[SERVER ERROR]\n";
-  }
-
+  addMsg(text, "user");
   input.value = "";
-  log.scrollTop = log.scrollHeight;
+
+  let res = await fetch("/command", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ user: "player1", command: text })
+  });
+
+  let data = await res.json();
+
+  addMsg(data.msg, "bot");
+
+  document.getElementById("stats").innerText =
+    JSON.stringify(data.player, null, 2);
+
+  loadBoard();
 }
 
-function quick(cmd) {
-  document.getElementById("cmd").value = cmd;
+async function loadBoard() {
+  let res = await fetch("/leaderboard");
+  let data = await res.json();
+
+  document.getElementById("leaderboard").innerText =
+    JSON.stringify(data, null, 2);
 }
 
-function updatePanels(msg) {
-  if (msg.includes("{")) {
-    try {
-      let parsed = JSON.parse(msg);
-      document.getElementById("inventory").innerText =
-        JSON.stringify(parsed, null, 2);
-    } catch {}
-  }
-}
+document.getElementById("cmd").addEventListener("keypress", e => {
+  if (e.key === "Enter") send();
+});
 </script>
 
 </body>
