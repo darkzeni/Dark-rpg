@@ -1,56 +1,40 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(__dirname));
 
 // =========================
-// DATABASE (BETA MEMORY)
+// SAVE SYSTEM (TEMP)
 // =========================
+const SAVE_FILE = "save.json";
+
 let players = {};
 
-// =========================
-// ITEM SYSTEM
-// =========================
-const items = {
-  stone: { type: "material" },
-  iron: { type: "material" },
+if (fs.existsSync(SAVE_FILE)) {
+  players = JSON.parse(fs.readFileSync(SAVE_FILE));
+}
 
-  "stone sword": {
-    type: "weapon",
-    req: { stone: 10 }
-  },
-
-  "iron blade": {
-    type: "weapon",
-    req: { iron: 15, stone: 5 }
-  }
-};
+function saveGame() {
+  fs.writeFileSync(SAVE_FILE, JSON.stringify(players, null, 2));
+}
 
 // =========================
-// HAX SYSTEM
+// HAX SCALING (POWER)
 // =========================
-const hax = {
-  "speed burst": {
-    tier: "F",
-    cost: 5,
-    effect: "speed + small boost"
-  },
-
-  "iron guard": {
-    tier: "F",
-    cost: 6,
-    effect: "slight damage reduction"
-  },
-
-  "energy strike": {
-    tier: "E",
-    cost: 10,
-    effect: "bonus damage"
-  }
+const haxScaling = {
+  F: 1,
+  E: 1.2,
+  D: 1.5,
+  C: 2,
+  B: 3,
+  A: 5,
+  S: 10
 };
 
 // =========================
@@ -59,133 +43,192 @@ const hax = {
 function getPlayer(id) {
   if (!players[id]) {
     players[id] = {
+      hp: 100,
       stats: {
-        strength: 1,
-        agility: 1,
-        stamina: 10
+        strength: 5,
+        agility: 5
       },
-      inventory: {
-        stone: 20,
-        iron: 10
-      },
-      hax: ["speed burst"],
-      cooldowns: {}
+      abilities: ["punch"],
+      haxLevel: "F",
+
+      inventory: { stone: 20 },
+
+      memory: [],
+      createdItems: [],
+      quests: []
     };
   }
   return players[id];
 }
 
 // =========================
-// SERVE FRONTEND (IMPORTANT)
+// AI GENERATION SYSTEM
 // =========================
-app.use(express.static(__dirname));
+function generateContent(p, input) {
+  if (input.includes("create") || input.includes("make")) {
+    let item = "Item_" + Math.floor(Math.random() * 10000);
+    p.createdItems.push(item);
+    return `You created ${item}. It now exists permanently.`;
+  }
 
-// homepage
+  if (input.includes("quest")) {
+    let quest = "Defeat " + (Math.floor(Math.random() * 5) + 1) + " enemies";
+    p.quests.push(quest);
+    return `New Quest: ${quest}`;
+  }
+
+  return null;
+}
+
+// =========================
+// MAIN AI / COMMAND ENGINE
+// =========================
+function interpret(input, p) {
+  input = input.toLowerCase();
+
+  // memory
+  p.memory.push(input);
+
+  // AI generation
+  let gen = generateContent(p, input);
+  if (gen) return gen;
+
+  // TRAIN (balanced)
+  if (input.includes("train")) {
+    let gain = Math.random() < 0.7 ? 1 : 2;
+
+    if (p.stats.strength > 50) gain = 0.5;
+    if (p.stats.strength > 100) gain = 0.2;
+
+    p.stats.strength += gain;
+
+    return `You trained. Strength +${gain.toFixed(1)} (now ${p.stats.strength.toFixed(1)})`;
+  }
+
+  // COMBAT
+  if (input.includes("fight") || input.includes("attack")) {
+    let base = p.stats.strength;
+    let multi = haxScaling[p.haxLevel];
+
+    let dmg = Math.floor((Math.random() * 10 + base) * multi);
+
+    let enemyHp = 20 + Math.random() * 30;
+
+    if (dmg >= enemyHp) {
+      p.stats.strength += 0.5;
+      return `You won the fight. Damage: ${dmg}. Small strength gain.`;
+    } else {
+      p.hp -= 10;
+      return `You lost. HP now ${p.hp}`;
+    }
+  }
+
+  // ABILITIES
+  if (input.includes("abilities")) {
+    return "Abilities: " + p.abilities.join(", ");
+  }
+
+  if (input.includes("learn")) {
+    if (!p.abilities.includes("fireball")) {
+      p.abilities.push("fireball");
+      return "You learned Fireball 🔥";
+    }
+    return "You already know that.";
+  }
+
+  // HAX PROGRESSION
+  if (input.includes("limit break")) {
+    const order = ["F","E","D","C","B","A","S"];
+    let i = order.indexOf(p.haxLevel);
+
+    if (i < order.length - 1) {
+      p.haxLevel = order[i + 1];
+      return `Limit broken. Hax now ${p.haxLevel}`;
+    }
+
+    return "Max hax reached.";
+  }
+
+  // MEMORY QUERIES
+  if (input.includes("what did i create")) {
+    return p.createdItems.length
+      ? p.createdItems.join(", ")
+      : "Nothing created yet.";
+  }
+
+  if (input.includes("quests")) {
+    return p.quests.length
+      ? p.quests.join("\n")
+      : "No quests.";
+  }
+
+  // STATS
+  if (input.includes("stats")) {
+    return JSON.stringify(p.stats, null, 2);
+  }
+
+  // HEAL
+  if (input.includes("heal")) {
+    p.hp = 100;
+    return "Healed to full.";
+  }
+
+  // INVENTORY
+  if (input.includes("inventory")) {
+    return JSON.stringify(p.inventory, null, 2);
+  }
+
+  // FALLBACK AI
+  return `I understand parts of that.
+
+Try:
+- train
+- fight
+- create
+- quest
+- abilities
+
+You said: "${input}"`;
+}
+
+// =========================
+// ROUTES
+// =========================
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// =========================
-// COMMAND SYSTEM
-// =========================
 app.post("/command", (req, res) => {
   const { user, command } = req.body;
 
-  if (!command) {
-    return res.json({ msg: "No command entered" });
-  }
-
   const p = getPlayer(user || "player1");
 
-  let msg = "";
-  const args = command.toLowerCase().split(" ");
-  const base = args[0];
+  let reply = interpret(command || "", p);
 
-  // TRAIN
-  if (base === "train") {
-    let stat = args[1];
+  saveGame();
 
-    if (!p.stats[stat]) {
-      msg = "Unknown stat";
-    } else {
-      p.stats[stat] += 1;
-      msg = `${stat} increased to ${p.stats[stat]}`;
-    }
-  }
-
-  // INVENTORY
-  else if (base === "inventory") {
-    msg = JSON.stringify(p.inventory, null, 2);
-  }
-
-  // LEADERBOARD
-  else if (base === "leaderboard") {
-    let board = Object.entries(players)
-      .sort((a, b) => b[1].stats.strength - a[1].stats.strength)
-      .map(([name, data]) => `${name}: STR ${data.stats.strength}`)
-      .join("\n");
-
-    msg = board || "No players";
-  }
-
-  // CRAFT
-  else if (base === "craft") {
-    let itemName = command.replace("craft ", "");
-
-    let item = items[itemName];
-    if (!item || !item.req) {
-      msg = "Invalid recipe";
-    } else {
-      let canCraft = true;
-
-      for (let r in item.req) {
-        if ((p.inventory[r] || 0) < item.req[r]) {
-          canCraft = false;
-          msg = "Missing materials";
-        }
-      }
-
-      if (canCraft) {
-        for (let r in item.req) {
-          p.inventory[r] -= item.req[r];
-        }
-
-        p.inventory[itemName] = (p.inventory[itemName] || 0) + 1;
-        msg = `Crafted ${itemName}`;
-      }
-    }
-  }
-
-  // HAX
-  else if (base === "hax") {
-    msg = "Hax: " + p.hax.join(", ");
-  }
-
-  else if (base === "use") {
-    let name = command.replace("use ", "");
-    let ability = hax[name];
-
-    if (!ability) {
-      msg = "Unknown hax";
-    } else if (!p.hax.includes(name)) {
-      msg = "You don't own this hax";
-    } else {
-      msg = `Used ${name}: ${ability.effect}`;
-    }
-  }
-
-  else {
-    msg = "Unknown command";
-  }
-
-  res.json({ msg });
+  res.json({ msg: reply, player: p });
 });
 
 // =========================
-// START SERVER (FIXED)
+// LEADERBOARD
+// =========================
+app.get("/leaderboard", (req, res) => {
+  let board = Object.entries(players)
+    .map(([name, data]) => ({
+      name,
+      strength: data.stats.strength
+    }))
+    .sort((a, b) => b.strength - a.strength);
+
+  res.json(board);
+});
+
+// =========================
+// START SERVER
 // =========================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("RPG running on port " + PORT);
+  console.log("Running on " + PORT);
 });
