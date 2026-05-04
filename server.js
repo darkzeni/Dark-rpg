@@ -17,65 +17,70 @@ function save() {
   fs.writeFileSync(SAVE, JSON.stringify(players, null, 2));
 }
 
-// ===== GLOBAL WORLD =====
+// ===== GLOBAL =====
 let worldEvent = null;
 let lastEvent = Date.now();
 
-// ===== DATA =====
-const abilityTiers = { F:1, E:1.2, D:1.5, C:2, B:3, A:4, S:6 };
+// ===== CONTENT POOLS =====
 
-const abilitiesData = {
-  punch:{tier:"F",scaling:"strength",base:1},
-  kick:{tier:"F",scaling:"strength",base:2},
-  slam:{tier:"E",scaling:"strength",base:4}
-};
+// ORES (FILLER + EXPANSION BASE)
+const ores = [
+  "stone","iron","coal","copper","nickel","tin"
+];
 
-const ores = {
-  T1:["stone","iron","coal","copper"]
-};
-
+// ENEMIES (EARLY GAME VARIANTS)
 const enemies = {
-  slime:{hp:20,atk:[5,6]},
+  slime:{hp:20,atk:[4,6]},
+  "red slime":{hp:25,atk:[5,7]},
   goblin:{hp:30,atk:[6,8]},
-  lizard:{hp:35,atk:[7,9]}
+  lizard:{hp:35,atk:[7,9]},
+  serpent:{hp:40,atk:[8,10]}
 };
 
+// BOSSES
 const bosses = {
   cave_guardian:{
     hp:200,
-    phases:[
-      {hp:200,atk:[10,12]},
-      {hp:100,atk:[15,18]}
-    ]
+    atk:[12,15],
+    phase2:{hp:100,atk:[18,22]}
   }
 };
 
+// ITEMS
 const items = {
   "iron sword":{type:"weapon",dmg:5},
   "iron armour":{type:"armor",def:5}
 };
 
+// BASE RECIPES
 const recipes = {
   "iron sword":{iron:5},
   "iron armour":{iron:8}
 };
 
-const zones = {
-  plains:{enemies:["slime","goblin"],ores:["stone","iron"]}
-};
+// ABILITIES
+const abilityTiers = {F:1,E:1.2,D:1.5,C:2};
 
-const dimensions = {
-  overworld:{multi:1},
-  void:{multi:2}
+const abilitiesData = {
+  punch:{tier:"F",scaling:"strength",base:1},
+  kick:{tier:"F",scaling:"strength",base:2},
+  slam:{tier:"E",scaling:"strength",base:4},
+  dash:{tier:"E",scaling:"speed",base:3}
 };
 
 // ===== PLAYER =====
 function getPlayer(id){
   if(!players[id]){
     players[id]={
-      name:id,
+      name:null,
+      tutorial:true,
 
-      baseStats:{strength:5,defense:2,stamina:5,intelligence:1},
+      level:1,
+      xp:0,
+      xpNeeded:50,
+      sp:0,
+
+      baseStats:{strength:5,defense:2,stamina:5,intelligence:1,speed:3},
       stats:{},
 
       hp:100,maxHp:100,
@@ -89,8 +94,6 @@ function getPlayer(id){
 
       limitBreak:{strength:10,defense:10},
 
-      mobIndex:{},
-
       queue:[],
       activeTask:null,
 
@@ -99,11 +102,10 @@ function getPlayer(id){
       memory:[],
       discoveredRecipes:{},
 
-      zone:"plains",
-      dimension:"overworld",
+      mobIndex:{},
 
-      faction:null,
-      reputation:{}
+      zone:"plains",
+      dimension:"overworld"
     };
   }
   return players[id];
@@ -124,6 +126,22 @@ function applyStats(p){
   }
 
   p.stats=s;
+}
+
+// ===== XP =====
+function addXP(p,amt){
+  p.xp+=amt;
+  let msg=`+${amt} XP`;
+
+  while(p.xp>=p.xpNeeded){
+    p.xp-=p.xpNeeded;
+    p.level++;
+    p.sp+=5;
+    p.xpNeeded=Math.floor(p.xpNeeded*1.5);
+    msg+=`\nLEVEL UP → ${p.level} (+5 SP)`;
+  }
+
+  return msg;
 }
 
 // ===== TASK SYSTEM =====
@@ -147,20 +165,43 @@ function processTask(p){
   return null;
 }
 
+// ===== TASK COMPLETE =====
 function completeTask(p,t){
+
+  // TRAIN
   if(t.type==="train"){
     if(p.baseStats[t.data]>=p.limitBreak[t.data]){
       return "Limit reached";
     }
+
     p.baseStats[t.data]+=1;
-    return `${t.data} increased`;
+    return `${t.data} increased\n${addXP(p,5)}`;
   }
 
-  if(t.type==="explore") return explore(p);
+  // EXPLORE
+  if(t.type==="explore"){
+    let r=Math.random();
 
+    if(r<0.4){
+      let ore=ores[Math.floor(Math.random()*ores.length)];
+      p.inventory[ore]=(p.inventory[ore]||0)+2;
+      return `Mined ${ore}\n${addXP(p,8)}`;
+    }
+
+    if(r<0.8){
+      let names=Object.keys(enemies);
+      let e=names[Math.floor(Math.random()*names.length)];
+      return `Encountered ${e}`;
+    }
+
+    return "Nothing found";
+  }
+
+  // CRAFT
   if(t.type==="craft"){
     let item=t.data;
     let r=p.discoveredRecipes[item]||recipes[item];
+
     if(!r) return "No recipe";
 
     for(let k in r){
@@ -170,52 +211,42 @@ function completeTask(p,t){
     for(let k in r) p.inventory[k]-=r[k];
 
     p.inventory[item]=(p.inventory[item]||0)+1;
+
     return `${item} crafted`;
   }
 
+  // DISCOVER
   if(t.type==="discover"){
     let name=t.data;
-    let r=generateRecipe(name,p);
-    p.discoveredRecipes[name]=r;
-    return `Discovered ${name}`;
+    let mats=["stone","iron","coal","copper"];
+    let req={};
+
+    for(let i=0;i<3;i++){
+      let m=mats[Math.floor(Math.random()*mats.length)];
+      req[m]=(req[m]||0)+Math.floor(Math.random()*3)+1;
+    }
+
+    p.discoveredRecipes[name]=req;
+
+    return `Discovered recipe for ${name}`;
   }
 
-  if(t.type==="limitbreak"){
-    let stat=t.data;
-    if(p.baseStats[stat]<p.limitBreak[stat]) return "Not at limit";
-    p.limitBreak[stat]+=10;
-    return `${stat} limit increased`;
-  }
-
+  // BOSS
   if(t.type==="boss"){
     let b=bosses.cave_guardian;
-    p.combat={name:"Cave Guardian",hp:b.hp,phase:0,boss:true,data:b};
+
+    p.combat={
+      name:"Cave Guardian",
+      hp:b.hp,
+      atk:b.atk,
+      phase:1,
+      data:b
+    };
+
     return "Boss spawned";
   }
 
   return "Done";
-}
-
-// ===== EXPLORE =====
-function explore(p){
-  let z=zones[p.zone];
-  let r=Math.random();
-
-  if(r<0.4){
-    let ore=z.ores[Math.floor(Math.random()*z.ores.length)];
-    p.inventory[ore]=(p.inventory[ore]||0)+2;
-
-    if(worldEvent==="ore boost") p.inventory[ore]+=2;
-
-    return `Mined ${ore}`;
-  }
-
-  if(r<0.8){
-    let e=z.enemies[Math.floor(Math.random()*z.enemies.length)];
-    return `Encountered ${e}`;
-  }
-
-  return "Nothing found";
 }
 
 // ===== ABILITIES =====
@@ -227,44 +258,7 @@ function useAbility(name,p){
   let tier=abilityTiers[ab.tier]||1;
   let xp=p.abilityXP[name]||0;
 
-  let growth=1+(xp/20);
-
-  return Math.floor((ab.base+stat)*tier*growth);
-}
-
-function levelAbility(p,name){
-  p.abilityXP[name]=(p.abilityXP[name]||0)+1;
-}
-
-function evolveAbility(p,name){
-  let xp=p.abilityXP[name]||0;
-
-  if(name==="punch" && xp>10 && !p.abilities.includes("kick")){
-    p.abilities.push("kick");
-    return "Punch evolved into Kick";
-  }
-
-  if(name==="kick" && xp>20 && !p.abilities.includes("slam")){
-    p.abilities.push("slam");
-    return "Kick evolved into Slam";
-  }
-
-  return null;
-}
-
-// ===== AI RECIPE =====
-function generateRecipe(name,p){
-  let mats=["stone","iron","coal","copper"];
-  let req={};
-
-  let count=2+Math.floor(Math.random()*3);
-
-  for(let i=0;i<count;i++){
-    let m=mats[Math.floor(Math.random()*mats.length)];
-    req[m]=(req[m]||0)+Math.floor(Math.random()*4)+1;
-  }
-
-  return req;
+  return Math.floor((ab.base+stat)*tier*(1+xp/20));
 }
 
 // ===== COMBAT =====
@@ -279,21 +273,25 @@ function combat(input,p){
     let dmg=useAbility(ab,p);
     c.hp-=dmg;
 
-    levelAbility(p,ab);
-    let evo=evolveAbility(p,ab);
+    p.abilityXP[ab]=(p.abilityXP[ab]||0)+1;
+
+    // PHASE CHANGE
+    if(c.data && c.hp<=c.data.phase2.hp && c.phase===1){
+      c.phase=2;
+      c.atk=c.data.phase2.atk;
+      return "Boss entered phase 2";
+    }
 
     if(c.hp<=0){
       p.mobIndex[c.name]=true;
       p.combat=null;
-      return `${c.name} defeated`;
+      return `${c.name} defeated\n${addXP(p,100)}`;
     }
 
-    let atk=c.enemy?c.enemy.atk:[10];
-    let taken=Math.max(0,atk[Math.floor(Math.random()*atk.length)]-p.stats.defense);
-
+    let taken=Math.max(0,c.atk[Math.floor(Math.random()*c.atk.length)]-p.stats.defense);
     p.hp-=taken;
 
-    return `${ab} dealt ${dmg}\nEnemy dealt ${taken}\n${evo||""}`;
+    return `${ab} dealt ${dmg}\nEnemy dealt ${taken}`;
   }
 
   if(input==="run"){
@@ -308,16 +306,39 @@ function combat(input,p){
 function run(input,p){
   input=input.toLowerCase();
 
-  p.memory.push(input);
-  if(p.memory.length>20) p.memory.shift();
-
   applyStats(p);
 
-  // world event
-  if(Date.now()-lastEvent>300000){
-    let ev=["ore boost","enemy rage","calm"];
-    worldEvent=ev[Math.floor(Math.random()*ev.length)];
-    lastEvent=Date.now();
+  // NAME
+  if(!p.name){
+    if(input.startsWith("name")){
+      p.name=input.replace("name ","");
+      return `Welcome ${p.name}`;
+    }
+    return "Set name using: name yourname";
+  }
+
+  // TUTORIAL
+  if(p.tutorial){
+    p.tutorial=false;
+    return `
+WELCOME
+
+Everything takes time
+
+Train 60s
+Explore 60s
+Craft 45s
+
+Level up = SP
+Use SP with add stat
+
+Start:
+explore
+train strength
+fight
+
+Type info anytime
+`;
   }
 
   let t=processTask(p);
@@ -327,21 +348,16 @@ function run(input,p){
 
   if(p.activeTask) return "Busy";
 
-  if(input.startsWith("train")){
-    let s=input.split(" ")[1];
-
-    if(!p.activeTask){
-      startTask(p,"train",s,60000);
-      return "Training...";
-    }
-
-    p.queue.push({type:"train",data:s,duration:60000});
-    return "Queued";
-  }
-
+  // COMMANDS
   if(input==="explore"){
     startTask(p,"explore",null,60000);
     return "Exploring...";
+  }
+
+  if(input.startsWith("train")){
+    let s=input.split(" ")[1];
+    startTask(p,"train",s,60000);
+    return "Training...";
   }
 
   if(input==="fight"){
@@ -349,34 +365,20 @@ function run(input,p){
     let n=names[Math.floor(Math.random()*names.length)];
     let e=enemies[n];
 
-    p.combat={name:n,hp:e.hp,enemy:e};
+    p.combat={name:n,hp:e.hp,atk:e.atk};
     return `${n} appeared`;
   }
 
   if(input.startsWith("craft")){
     let item=input.replace("craft ","");
-
-    if(!p.activeTask){
-      startTask(p,"craft",item,45000);
-      return "Crafting...";
-    }
-
-    p.queue.push({type:"craft",data:item,duration:45000});
-    return "Queued";
+    startTask(p,"craft",item,45000);
+    return "Crafting...";
   }
 
   if(input.startsWith("discover")){
-    let name=input.replace("discover ","");
-
-    startTask(p,"discover",name,90000);
+    let item=input.replace("discover ","");
+    startTask(p,"discover",item,90000);
     return "Researching...";
-  }
-
-  if(input.startsWith("limitbreak")){
-    let stat=input.split(" ")[1];
-
-    startTask(p,"limitbreak",stat,120000);
-    return "Attempting...";
   }
 
   if(input==="boss"){
@@ -384,32 +386,33 @@ function run(input,p){
     return "Preparing boss...";
   }
 
-  if(input.startsWith("equip")){
-    let item=input.replace("equip ","");
-
-    if(!p.inventory[item]) return "No item";
-
-    if(items[item].type==="weapon") p.equipment.weapon=item;
-    if(items[item].type==="armor") p.equipment.armor=item;
-
-    return `Equipped ${item}`;
+  if(input.startsWith("add")){
+    let stat=input.split(" ")[1];
+    if(p.sp<=0) return "No SP";
+    p.baseStats[stat]++;
+    p.sp--;
+    return `${stat} increased`;
   }
 
-  if(input==="abilities") return p.abilities.join(", ");
+  if(input==="info"){
+    return `
+Train 60s small XP
+Explore 60s medium XP
+Boss huge XP
+
+Level gives SP
+Use add strength
+
+Boss fastest leveling
+`;
+  }
+
   if(input==="inventory") return JSON.stringify(p.inventory,null,2);
   if(input==="stats") return JSON.stringify(p.stats,null,2);
+  if(input==="abilities") return p.abilities.join(", ");
   if(input==="index") return Object.keys(p.mobIndex).join(", ")||"None";
 
-  return `
-Commands:
-explore
-train strength
-fight
-craft iron sword
-discover item
-boss
-abilities
-`;
+  return "Unknown command";
 }
 
 // ===== ROUTES =====
@@ -419,14 +422,13 @@ app.get("/",(req,res)=>{
 
 app.post("/command",(req,res)=>{
   const {user,command}=req.body;
-
-  let p=getPlayer(user||"player1");
+  let p=getPlayer(user||"temp");
 
   let msg=run(command,p);
 
   save();
 
-  res.json({msg,player:p});
+  res.json({msg,player:p,worldEvent});
 });
 
 app.listen(process.env.PORT||3000);
