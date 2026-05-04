@@ -10,10 +10,9 @@ app.use(express.json());
 app.use(express.static(__dirname));
 
 // =========================
-// SAVE SYSTEM (TEMP)
+// SAVE
 // =========================
 const SAVE_FILE = "save.json";
-
 let players = {};
 
 if (fs.existsSync(SAVE_FILE)) {
@@ -25,210 +24,284 @@ function saveGame() {
 }
 
 // =========================
-// HAX SCALING (POWER)
+// TIERS + RARITY
 // =========================
-const haxScaling = {
-  F: 1,
-  E: 1.2,
-  D: 1.5,
-  C: 2,
-  B: 3,
-  A: 5,
-  S: 10
+const tiers = {
+  T1: ["stone","iron","wood"],
+  T2: ["aetherite","cobalt","frigidium"],
+  T3: ["exorite","skynium","emberite"],
+  T4: ["nullium","zaphrite","nanite"]
 };
 
+const rarities = ["Common","Uncommon","Rare","Epic","Legendary","Mythic"];
+
 // =========================
-// PLAYER INIT
+// PLAYER
 // =========================
 function getPlayer(id) {
   if (!players[id]) {
     players[id] = {
       hp: 100,
+
       stats: {
         strength: 5,
-        agility: 5
+        agility: 5,
+        intelligence: 1
       },
-      abilities: ["punch"],
-      haxLevel: "F",
 
-      inventory: { stone: 20 },
+      training: {
+        active: null,
+        queue: []
+      },
 
-      memory: [],
+      inventory: {
+        stone: 50,
+        iron: 20
+      },
+
+      recipes: {},
+      recipeXP: {},
+
       createdItems: [],
-      quests: []
+      discoveredOres: ["stone","iron"]
     };
   }
   return players[id];
 }
 
 // =========================
-// AI GENERATION SYSTEM
+// TRAINING
 // =========================
-function generateContent(p, input) {
-  if (input.includes("create") || input.includes("make")) {
-    let item = "Item_" + Math.floor(Math.random() * 10000);
-    p.createdItems.push(item);
-    return `You created ${item}. It now exists permanently.`;
+function processTraining(p) {
+  if (!p.training.active && p.training.queue.length > 0) {
+    let next = p.training.queue.shift();
+
+    p.training.active = {
+      stat: next,
+      start: Date.now(),
+      duration: 60000
+    };
   }
 
-  if (input.includes("quest")) {
-    let quest = "Defeat " + (Math.floor(Math.random() * 5) + 1) + " enemies";
-    p.quests.push(quest);
-    return `New Quest: ${quest}`;
+  if (p.training.active) {
+    let t = p.training.active;
+    let done = Date.now() - t.start >= t.duration;
+
+    if (done) {
+      let stat = t.stat;
+
+      let gain = 1;
+      if (p.stats[stat] > 50) gain = 0.5;
+      if (p.stats[stat] > 100) gain = 0.2;
+
+      p.stats[stat] += gain;
+      p.training.active = null;
+
+      return `${stat} training finished (+${gain})`;
+    }
   }
 
   return null;
 }
 
 // =========================
-// MAIN AI / COMMAND ENGINE
+// PROGRESSION
+// =========================
+function getTier(p) {
+  let s = p.stats.strength;
+
+  if (s < 20) return "T1";
+  if (s < 50) return "T2";
+  if (s < 100) return "T3";
+  return "T4";
+}
+
+function getRarity(p) {
+  let roll = Math.random() + (p.stats.intelligence / 100);
+
+  if (roll < 0.4) return "Common";
+  if (roll < 0.7) return "Uncommon";
+  if (roll < 1.0) return "Rare";
+  if (roll < 1.3) return "Epic";
+  if (roll < 1.6) return "Legendary";
+  return "Mythic";
+}
+
+// =========================
+// AI RECIPE GENERATION
+// =========================
+function generateRecipe(item, p) {
+  let tier = getTier(p);
+  let mats = tiers[tier];
+
+  let req = {};
+
+  for (let i = 0; i < 2; i++) {
+    let m = mats[Math.floor(Math.random()*mats.length)];
+    req[m] = Math.floor(Math.random()*5)+3;
+  }
+
+  // scaling complexity
+  if (tier !== "T1") {
+    req["core"] = 1;
+  }
+
+  if (tier === "T4") {
+    req["reactor"] = 1;
+  }
+
+  return req;
+}
+
+// =========================
+// ENGINE
 // =========================
 function interpret(input, p) {
   input = input.toLowerCase();
 
-  // memory
-  p.memory.push(input);
+  let done = processTraining(p);
+  if (done) return done;
 
-  // AI generation
-  let gen = generateContent(p, input);
-  if (gen) return gen;
+  if (p.training.active) {
+    if (input.includes("cancel")) {
+      p.training.active = null;
+      p.training.queue = [];
+      return "Training cancelled.";
+    }
 
-  // TRAIN (balanced)
-  if (input.includes("train")) {
-    let gain = Math.random() < 0.7 ? 1 : 2;
+    let t = p.training.active;
+    let left = Math.ceil((t.duration - (Date.now()-t.start))/1000);
 
-    if (p.stats.strength > 50) gain = 0.5;
-    if (p.stats.strength > 100) gain = 0.2;
-
-    p.stats.strength += gain;
-
-    return `You trained. Strength +${gain.toFixed(1)} (now ${p.stats.strength.toFixed(1)})`;
+    return `Training ${t.stat} (${left}s left)
+Queue: ${p.training.queue.join(", ") || "empty"}`;
   }
 
-  // COMBAT
-  if (input.includes("fight") || input.includes("attack")) {
-    let base = p.stats.strength;
-    let multi = haxScaling[p.haxLevel];
+  // TRAIN
+  if (input.startsWith("train")) {
+    let stat = input.split(" ")[1];
 
-    let dmg = Math.floor((Math.random() * 10 + base) * multi);
+    if (!p.stats[stat]) return "Invalid stat.";
 
-    let enemyHp = 20 + Math.random() * 30;
+    if (!p.training.active) {
+      p.training.active = {
+        stat,
+        start: Date.now(),
+        duration: 60000
+      };
+      return `Started training ${stat}`;
+    }
 
-    if (dmg >= enemyHp) {
-      p.stats.strength += 0.5;
-      return `You won the fight. Damage: ${dmg}. Small strength gain.`;
+    p.training.queue.push(stat);
+    return `${stat} added to queue`;
+  }
+
+  // MINE
+  if (input === "mine") {
+    let tier = getTier(p);
+    let ore = tiers[tier][Math.floor(Math.random()*tiers[tier].length)];
+
+    p.inventory[ore] = (p.inventory[ore] || 0) + 1;
+
+    return `You mined ${ore} (${tier})`;
+  }
+
+  // CREATE
+  if (input.startsWith("create") || input.startsWith("make")) {
+    let item = input.replace("create","").replace("make","").trim();
+    if (!item) return "Create what?";
+
+    let recipe = generateRecipe(item, p);
+    let rarity = getRarity(p);
+
+    p.recipes[item] = { req: recipe, rarity };
+    p.recipeXP[item] = 0;
+
+    return `You designed a ${rarity} ${item}.
+
+Recipe:
+${JSON.stringify(recipe, null, 2)}`;
+  }
+
+  // CRAFT
+  if (input.startsWith("craft")) {
+    let item = input.replace("craft ","");
+
+    let data = p.recipes[item];
+    if (!data) return "No recipe.";
+
+    let recipe = data.req;
+
+    for (let r in recipe) {
+      if ((p.inventory[r] || 0) < recipe[r]) {
+        return "Missing materials.";
+      }
+    }
+
+    for (let r in recipe) {
+      p.inventory[r] -= recipe[r];
+    }
+
+    p.recipeXP[item] += 1;
+
+    return `Crafted ${item}. Mastery: ${p.recipeXP[item]}`;
+  }
+
+  // BOSS
+  if (input === "boss") {
+    let hp = 50 + Math.random()*50;
+    let dmg = p.stats.strength + Math.random()*15;
+
+    if (dmg >= hp) {
+      p.stats.strength += 3;
+      return "Boss defeated. You feel stronger.";
     } else {
-      p.hp -= 10;
-      return `You lost. HP now ${p.hp}`;
+      p.hp -= 20;
+      return `Lost. HP ${p.hp}`;
     }
   }
 
-  // ABILITIES
-  if (input.includes("abilities")) {
-    return "Abilities: " + p.abilities.join(", ");
-  }
+  if (input === "stats") return JSON.stringify(p.stats,null,2);
+  if (input === "inventory") return JSON.stringify(p.inventory,null,2);
+  if (input === "recipes") return JSON.stringify(p.recipes,null,2);
 
-  if (input.includes("learn")) {
-    if (!p.abilities.includes("fireball")) {
-      p.abilities.push("fireball");
-      return "You learned Fireball 🔥";
-    }
-    return "You already know that.";
-  }
-
-  // HAX PROGRESSION
-  if (input.includes("limit break")) {
-    const order = ["F","E","D","C","B","A","S"];
-    let i = order.indexOf(p.haxLevel);
-
-    if (i < order.length - 1) {
-      p.haxLevel = order[i + 1];
-      return `Limit broken. Hax now ${p.haxLevel}`;
-    }
-
-    return "Max hax reached.";
-  }
-
-  // MEMORY QUERIES
-  if (input.includes("what did i create")) {
-    return p.createdItems.length
-      ? p.createdItems.join(", ")
-      : "Nothing created yet.";
-  }
-
-  if (input.includes("quests")) {
-    return p.quests.length
-      ? p.quests.join("\n")
-      : "No quests.";
-  }
-
-  // STATS
-  if (input.includes("stats")) {
-    return JSON.stringify(p.stats, null, 2);
-  }
-
-  // HEAL
-  if (input.includes("heal")) {
-    p.hp = 100;
-    return "Healed to full.";
-  }
-
-  // INVENTORY
-  if (input.includes("inventory")) {
-    return JSON.stringify(p.inventory, null, 2);
-  }
-
-  // FALLBACK AI
-  return `I understand parts of that.
-
-Try:
-- train
-- fight
-- create
-- quest
-- abilities
-
-You said: "${input}"`;
+  return `Try:
+- mine
+- train strength
+- create sword
+- craft sword
+- boss`;
 }
 
 // =========================
 // ROUTES
 // =========================
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+app.get("/", (req,res)=>{
+  res.sendFile(path.join(__dirname,"index.html"));
 });
 
-app.post("/command", (req, res) => {
-  const { user, command } = req.body;
+app.post("/command",(req,res)=>{
+  const {user,command} = req.body;
 
-  const p = getPlayer(user || "player1");
+  let p = getPlayer(user || "player1");
 
-  let reply = interpret(command || "", p);
+  let msg = interpret(command || "", p);
 
   saveGame();
 
-  res.json({ msg: reply, player: p });
+  res.json({msg, player:p});
 });
 
-// =========================
-// LEADERBOARD
-// =========================
-app.get("/leaderboard", (req, res) => {
+app.get("/leaderboard",(req,res)=>{
   let board = Object.entries(players)
-    .map(([name, data]) => ({
+    .map(([name,data])=>({
       name,
-      strength: data.stats.strength
+      strength:data.stats.strength
     }))
-    .sort((a, b) => b.strength - a.strength);
+    .sort((a,b)=>b.strength-a.strength);
 
   res.json(board);
 });
 
-// =========================
-// START SERVER
-// =========================
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log("Running on " + PORT);
-});
+app.listen(PORT,()=>console.log("Running "+PORT));
