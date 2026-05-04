@@ -5,28 +5,32 @@
 
   <style>
     body {
+      margin:0;
       background:#0a0a0a;
       color:#fff;
       font-family:Arial;
-      margin:0;
+
       display:flex;
       flex-direction:column;
       height:100vh;
+      overflow:hidden;
     }
 
     #top {
       display:flex;
-      gap:10px;
-      padding:10px;
+      flex-wrap:wrap;
+      gap:6px;
+      padding:6px;
       background:#111;
     }
 
     .panel {
-      flex:1;
+      flex:1 1 45%;
       background:#1a1a1a;
-      padding:10px;
-      border-radius:8px;
-      font-size:12px;
+      padding:6px;
+      border-radius:6px;
+      font-size:11px;
+      max-height:85px;
       overflow:auto;
     }
 
@@ -39,8 +43,10 @@
 
     #bottom {
       display:flex;
-      padding:10px;
+      padding:8px;
       background:#111;
+      position:sticky;
+      bottom:0;
     }
 
     input {
@@ -57,22 +63,33 @@
       color:white;
       border:none;
     }
+
+    .bar {
+      height:6px;
+      background:#333;
+      border-radius:4px;
+      margin-top:4px;
+      overflow:hidden;
+    }
+
+    .fill {
+      height:100%;
+      background:#4caf50;
+      width:0%;
+    }
   </style>
 </head>
 
 <body>
 
 <div id="top">
-  <div id="stats" class="panel">Stats</div>
-  <div id="inventory" class="panel">Inventory</div>
-  <div id="abilities" class="panel">Abilities</div>
-  <div id="info" class="panel">Info</div>
-</div>
-
-<div id="top">
-  <div id="index" class="panel">Mob Index</div>
-  <div id="task" class="panel">Task</div>
-  <div id="event" class="panel">World</div>
+  <div id="stats" class="panel"></div>
+  <div id="inventory" class="panel"></div>
+  <div id="abilities" class="panel"></div>
+  <div id="info" class="panel"></div>
+  <div id="index" class="panel"></div>
+  <div id="task" class="panel"></div>
+  <div id="event" class="panel"></div>
 </div>
 
 <div id="chat"></div>
@@ -84,29 +101,38 @@
 
 <script>
 let user = localStorage.getItem("user") || "temp";
+let lastPlayer = null;
 
+// CHAT
 function add(msg){
   let chat = document.getElementById("chat");
   chat.innerText += "\n> " + msg;
   chat.scrollTop = chat.scrollHeight;
 }
 
+// FORMAT
 function formatObj(obj){
   if(!obj) return "None";
-  return Object.entries(obj).map(([k,v])=>`${k}: ${v}`).join("\n");
+  return Object.entries(obj)
+    .map(([k,v]) => `${k}: ${v}`)
+    .join("\n");
 }
 
+// UI UPDATE
 function updateUI(p, worldEvent){
+  if(!p) return;
+  lastPlayer = p;
 
   // STATS
-  document.getElementById("stats").innerText =
+  document.getElementById("stats").innerHTML =
 `Name: ${p.name}
 
-Level: ${p.level}
+Lvl: ${p.level}
 XP: ${p.xp}/${p.xpNeeded}
 SP: ${p.sp}
 
 HP: ${p.hp}/${p.maxHp}
+<div class="bar"><div class="fill" style="width:${(p.hp/p.maxHp)*100}%"></div></div>
 
 STR: ${p.stats.strength}
 DEF: ${p.stats.defense}
@@ -120,81 +146,92 @@ SPD: ${p.stats.speed}`;
 
   // ABILITIES
   document.getElementById("abilities").innerText =
-"Abilities:\n" + p.abilities.join("\n");
+"Abilities:\n" + (p.abilities.join("\n") || "None");
 
-  // MOB INDEX
+  // INDEX
   document.getElementById("index").innerText =
 "Seen:\n" + (Object.keys(p.mobIndex).join("\n") || "None");
 
-  // TASK SYSTEM
+  // TASK
   if(p.activeTask){
-    let timeLeft = Math.max(0,
-      Math.floor((p.activeTask.duration - (Date.now() - p.activeTask.start)) / 1000)
-    );
+    let total = p.activeTask.duration;
+    let done = Date.now() - p.activeTask.start;
+    let percent = Math.min(100, (done / total) * 100);
 
-    document.getElementById("task").innerText =
+    let timeLeft = Math.max(0, Math.floor((total - done)/1000));
+
+    document.getElementById("task").innerHTML =
 `Active: ${p.activeTask.type}
-Time Left: ${timeLeft}s`;
+Time: ${timeLeft}s
+<div class="bar"><div class="fill" style="width:${percent}%"></div></div>`;
   } else {
     document.getElementById("task").innerText = "Idle";
   }
 
-  // WORLD EVENT
+  // WORLD
   document.getElementById("event").innerText =
     "Event: " + (worldEvent || "None");
 
-  // INFO PANEL (STATIC GUIDE)
+  // INFO
   document.getElementById("info").innerText =
-`Quick Info:
-
-train stat → 60s
+`train → 60s
 explore → 60s
 craft → 45s
 discover → 90s
 
 XP → level → SP
-
-Use:
 add strength
 
-Boss = best XP`;
+boss = best xp`;
 }
 
+// SEND COMMAND
 async function send(){
   let input = document.getElementById("cmd");
   let cmd = input.value.trim();
-  input.value = "";
-
   if(!cmd) return;
 
+  input.value = "";
   add(cmd);
 
-  let res = await fetch("/command", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      user:user,
-      command:cmd
-    })
-  });
+  try{
+    let res = await fetch("/command", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ user:user, command:cmd })
+    });
 
-  let data = await res.json();
+    let data = await res.json();
 
-  add(data.msg);
+    add(data.msg);
+    updateUI(data.player, data.worldEvent);
 
-  updateUI(data.player, data.worldEvent);
+    if(data.player.name){
+      user = data.player.name;
+      localStorage.setItem("user", user);
+    }
 
-  // SAVE NAME
-  if(data.player.name){
-    user = data.player.name;
-    localStorage.setItem("user", user);
+  } catch {
+    add("Server error");
   }
 }
 
-// ENTER KEY SUPPORT
-document.getElementById("cmd").addEventListener("keypress", function(e){
-  if(e.key === "Enter") send();
+// ENTER KEY
+document.getElementById("cmd").addEventListener("keypress", e=>{
+  if(e.key==="Enter") send();
 });
+
+// AUTO UPDATE (THIS IS WHAT MAKES IT FEEL ALIVE)
+setInterval(()=>{
+  if(lastPlayer){
+    updateUI(lastPlayer);
+  }
+}, 1000);
+
+// FOCUS
+window.onload = ()=>{
+  document.getElementById("cmd").focus();
+};
 </script>
 
 </body>
