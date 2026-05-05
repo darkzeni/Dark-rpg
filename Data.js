@@ -1,40 +1,32 @@
-// data.js - The RPG Database
 module.exports = {
     CAPS: [20, 40, 60, 80, 100],
     
+    // Tiered progression with Hardness (H) and F-Durability requirements
     ORE_TIERS: {
-        "copper": { h: 5, t: "T1", pick: "starter" },
-        "iron": { h: 10, t: "T1", pick: "starter" },
-        "stellarite": { h: 20, t: "T1", pick: "starter" },
-        "cobalt": { h: 15, t: "T2", pick: "stellarite pickaxe" },
-        "impure zaphrite": { h: 45, t: "T2", pick: "stellarite pickaxe" },
-        "true stellarite": { h: 70, t: "T3", pick: "impure zaphrite pickaxe" }
+        "copper": { h: 5, t: "T1", pick: "starter", xp: 10 },
+        "iron": { h: 12, t: "T1", pick: "starter", xp: 25 },
+        "stellarite": { h: 25, t: "T1", pick: "starter", xp: 60 },
+        "cobalt": { h: 40, t: "T2", pick: "stellarite pickaxe", xp: 150 },
+        "impure zaphrite": { h: 80, t: "T2", pick: "stellarite pickaxe", xp: 350 },
+        "true stellarite": { h: 150, t: "T3", pick: "impure zaphrite pickaxe", xp: 800 },
+        "solstice": { h: 300, t: "T4", pick: "true stellarite pickaxe", xp: 2000 },
+        "benevolent ore": { h: 1000, t: "T5", pick: "solstice pickaxe", xp: 10000 }
+    },
+
+    // Detailed Magic System
+    SPELLS: {
+        "flare": { mana: 15, dmg: 2, element: "fire", reqInt: 5 },
+        "fireball": { mana: 40, dmg: 5, element: "fire", reqInt: 15 },
+        "void_rip": { mana: 100, dmg: 12, element: "shadow", reqInt: 50 },
+        "solar_flare": { mana: 250, dmg: 35, element: "fire", reqInt: 80 },
+        "abyssal_reach": { mana: 500, dmg: 80, element: "shadow", reqInt: 120 }
     },
 
     ZONE_MODIFIERS: {
-        "desert": { fire: 1.5, water: 0.5, earth: 1.2 },
-        "plains": { fire: 1.0, water: 1.0, earth: 1.0 },
-        "hollows": { fire: 0.7, shadow: 1.8, earth: 1.5 },
-        "citrea": { holy: 2.0, mana_regen: 1.5 }
-    },
-
-    TALENTS: {
-        "Pyromaniac": { req: "int", desc: "Fire spells have a 20% chance to reset cooldown." },
-        "Juggernaut": { req: "def", desc: "Gain +1,000 Max HP but lose 10% Speed." },
-        "Wind Walker": { req: "spd", desc: "Exploration/Travel times reduced by 15%." },
-        "Mana Well": { req: "mana", desc: "Mana regenerates in combat." }
-    },
-
-    PATHS: {
-        "pyromancer": { bonus: "int", spells: ["fireball", "inferno"] },
-        "sentinel": { bonus: "def", spells: ["iron skin", "shield bash"] },
-        "wraith": { bonus: "spd", spells: ["shadow step", "void strike"] }
-    },
-
-    REFINEMENT_COSTS: {
-        "iron": { f_boost: 500, gold: 200 },
-        "stellarite": { f_boost: 2000, gold: 1000 },
-        "zaphrite": { f_boost: 15000, gold: 10000 }
+        "citrea": { fire: 1.0, water: 1.0, shadow: 1.0, regen: 2.0, pvp: false },
+        "plains": { fire: 1.0, water: 1.0, shadow: 1.0, regen: 1.0, pvp: true },
+        "desert": { fire: 1.8, water: 0.4, shadow: 0.8, regen: 0.8, pvp: true },
+        "hollows": { fire: 0.5, water: 1.2, shadow: 2.0, regen: 0.5, pvp: true },
+        "ancient_ruins": { fire: 1.0, water: 1.0, shadow: 1.5, regen: 0.2, pvp: true }
     }
 };
-
