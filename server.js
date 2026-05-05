@@ -1,36 +1,46 @@
-// server.js - The Server Entry
 const express = require('express');
+const cors = require('cors');
 const state = require('./state');
 const engine = require('./engine');
+
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 function getPlayer(id) {
     if (!state.players[id]) {
         state.players[id] = {
-            name: id, level: 1, xp: 0, gold: 500,
-            stats: { str: 5, def: 5, spd: 5, int: 5 },
-            limitBreakStage: 0, talents: [],
-            pos: { x: 0, y: 0 }, inventory: {},
-            f_durability: 500, maxMana: 100
+            name: id,
+            level: 1,
+            xp: 0,
+            gold: 100,
+            stats: { str: 10, def: 10, spd: 10, int: 10 },
+            limitBreakStage: 0,
+            talents: [],
+            pos: { x: 0, y: 0 },
+            inventory: {},
+            equipment: { pickaxe: "starter" },
+            f_durability: 500,
+            maxMana: 100,
+            task: null
         };
     }
     return state.players[id];
 }
 
 app.post("/command", (req, res) => {
-    const p = getPlayer(req.body.user);
-    const result = engine.processCommand(req.body.command, p);
+    const { user, command } = req.body;
+    const p = getPlayer(user || "Wanderer");
+    const result = engine.processCommand(command, p);
     
-    // Hardmode XP Scaling: Level^2.5 * 150
-    const nextLevelXp = Math.pow(p.level, 2.5) * 150;
+    // XP Scaling
+    const nextLevelXp = Math.floor(Math.pow(p.level, 2.5) * 150);
     if (p.xp >= nextLevelXp) {
         p.level++;
-        // Trigger Level Up logic
     }
     
     res.json({ msg: result, player: p });
 });
 
-app.listen(3000, () => console.log("Hardmode Season 1 Engine Online on Port 3000"));
-
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Engine active for Dark RPG on port ${PORT}`));
